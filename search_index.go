@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/blevesearch/bleve"
 	"github.com/fanky5g/ponzu/driver"
-	"github.com/fanky5g/ponzu/infrastructure/repositories"
+	"github.com/fanky5g/ponzu/entities"
 	"reflect"
 	"strings"
 )
@@ -13,7 +13,7 @@ import (
 type Index struct {
 	Name              string
 	idx               bleve.Index
-	contentRepository repositories.ContentRepositoryInterface
+	contentRepository driver.Repository
 }
 
 func (index *Index) Key(id string) string {
@@ -25,7 +25,7 @@ func (index *Index) Key(id string) string {
 }
 
 func (index *Index) Update(id string, data interface{}) error {
-	entity, ok := data.(driver.Searchable)
+	entity, ok := data.(entities.Searchable)
 	if !ok {
 		return errors.New("entity does not implement searchable interface")
 	}
@@ -69,16 +69,24 @@ func (index *Index) Search(query string, count, offset int) ([]interface{}, erro
 		return nil, err
 	}
 
-	var results []string
+	var results []interface{}
 	for _, hit := range res.Hits {
-		results = append(results, hit.ID)
+		var entity interface{}
+		entity, err = index.contentRepository.FindOneById(hit.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find entity: %v", err)
+		}
+
+		if entity != nil {
+			results = append(results, entity)
+		}
 	}
 
 	// since we only index searchable fields. We need to fetch the original entities
-	return index.contentRepository.FindByTarget(results)
+	return results, nil
 }
 
-func NewSearchIndex(name string, index bleve.Index, contentRepository repositories.ContentRepositoryInterface) (driver.SearchIndexInterface, error) {
+func NewSearchIndex(name string, index bleve.Index, contentRepository driver.Repository) (driver.SearchIndexInterface, error) {
 	return &Index{
 		Name:              name,
 		idx:               index,

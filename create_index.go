@@ -5,6 +5,7 @@ import (
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/analysis/analyzer/keyword"
 	"github.com/fanky5g/ponzu/driver"
+	"github.com/fanky5g/ponzu/entities"
 	"log"
 	"path"
 	"path/filepath"
@@ -32,7 +33,7 @@ func (c *client) getExistingIndex(indexPath string, failOnMissingIndex bool) (dr
 	index.SetName(entityName)
 
 	var searchIndex driver.SearchIndexInterface
-	searchIndex, err = NewSearchIndex(entityName, index, c.contentRepository)
+	searchIndex, err = NewSearchIndex(entityName, index, c.repository(entityName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create search index: %v", err)
 	}
@@ -41,7 +42,7 @@ func (c *client) getExistingIndex(indexPath string, failOnMissingIndex bool) (dr
 }
 
 func (c *client) createIndex(entityName string, entityType interface{}, overwrite bool) error {
-	entity, ok := entityType.(driver.Searchable)
+	entity, ok := entityType.(entities.Searchable)
 	if !ok {
 		return fmt.Errorf("entity %s does not implement Searchable interface", entityName)
 	}
@@ -90,7 +91,7 @@ func (c *client) createIndex(entityName string, entityType interface{}, overwrit
 		return fmt.Errorf("failed to build index: %v", err)
 	}
 
-	searchIndex, err := NewSearchIndex(entityName, index, c.contentRepository)
+	searchIndex, err := NewSearchIndex(entityName, index, c.repository(entityName))
 	if err != nil {
 		return err
 	}
@@ -99,7 +100,6 @@ func (c *client) createIndex(entityName string, entityType interface{}, overwrit
 	return nil
 }
 
-// CreateIndex TODO: only call when creating an entity (via manual command)
 func (c *client) CreateIndex(entityName string, entityType interface{}) error {
 	return c.createIndex(entityName, entityType, false)
 }
