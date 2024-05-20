@@ -4,7 +4,7 @@ go 1.21.5
 
 require (
 	github.com/blevesearch/bleve v1.0.14
-	github.com/fanky5g/ponzu v0.0.0-20240520090810-b62d2142906d
+	github.com/fanky5g/ponzu v0.0.0-20240520092742-0a60fdd5393a
 )
 
 require (
@@ -24,6 +24,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect
@@ -35,6 +36,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
+	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.18.2 // indirect
 	github.com/steveyen/gtreap v0.1.0 // indirect

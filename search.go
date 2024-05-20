@@ -43,7 +43,7 @@ func (c *client) repository(entityType string) driver.Repository {
 	return repository.(driver.Repository)
 }
 
-func (c *client) GetIndex(entityName string) (driver.SearchIndexInterface, error) {
+func (c *client) GetIndex(entityName string) (driver.SearchInterface, error) {
 	if index, ok := c.indexes[entityName]; ok {
 		return index, nil
 	}
