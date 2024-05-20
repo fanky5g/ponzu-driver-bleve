@@ -1,13 +1,11 @@
 package search
 
 import (
-	"errors"
 	"fmt"
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/mapping"
 	"github.com/fanky5g/ponzu/config"
 	ponzuContent "github.com/fanky5g/ponzu/content"
-	"github.com/fanky5g/ponzu/content/item"
 	"github.com/fanky5g/ponzu/driver"
 	"github.com/fanky5g/ponzu/entities"
 	"log"
@@ -22,8 +20,18 @@ var IndexSuffix = ".index"
 
 type client struct {
 	searchPath   string
-	indexes      map[string]driver.SearchIndexInterface
+	indexes      map[string]driver.SearchInterface
 	repositories map[string]driver.Repository
+	entities     map[string]ponzuContent.Entity
+}
+
+func searchable(entity interface{}) bool {
+	indexableInterface, ok := entity.(entities.SearchIndexable)
+	if ok {
+		return indexableInterface.IndexContent()
+	}
+
+	return true
 }
 
 func (c *client) repository(entityType string) driver.Repository {
@@ -33,41 +41,6 @@ func (c *client) repository(entityType string) driver.Repository {
 	}
 
 	return repository.(driver.Repository)
-}
-
-// UpdateIndex TODO: only call when an item structure updates (via manual command)
-func (c *client) UpdateIndex(entityName string, entityType interface{}) error {
-	if err := c.createIndex(entityName, entityType, true); err != nil {
-		return err
-	}
-
-	searchIndex, err := c.GetIndex(entityName)
-	if err != nil {
-		return err
-	}
-
-	if searchIndex == nil {
-		return errors.New("failed to update index")
-	}
-
-	go func() {
-		entities, err := c.repository(entityName).FindAll()
-		if err != nil {
-			log.Fatalf("Failed to re-index namespace: %s. Error: %v", entityName, err)
-		}
-
-		for _, entity := range entities {
-			if err = searchIndex.Update(entity.(item.Identifiable).ItemID(), entity); err != nil {
-				log.Fatalf("Failed to index entity: %v", entity)
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (c *client) Indexes() (map[string]driver.SearchIndexInterface, error) {
-	return c.indexes, nil
 }
 
 func (c *client) GetIndex(entityName string) (driver.SearchIndexInterface, error) {
@@ -106,6 +79,7 @@ func New(
 	}
 
 	repos := make(map[string]driver.Repository)
+	contentEntities := make(map[string]ponzuContent.Entity)
 	for entityName, entityConstructor := range contentTypes {
 		entity := entityConstructor()
 		persistable, ok := entity.(entities.Persistable)
@@ -119,12 +93,14 @@ func New(
 		}
 
 		repos[entityName] = repository.(driver.Repository)
+		contentEntities[entityName] = entity.(ponzuContent.Entity)
 	}
 
 	c := &client{
-		indexes:      make(map[string]driver.SearchIndexInterface),
+		indexes:      make(map[string]driver.SearchInterface),
 		searchPath:   searchPath,
 		repositories: repos,
+		entities:     contentEntities,
 	}
 
 	if contentTypes != nil {

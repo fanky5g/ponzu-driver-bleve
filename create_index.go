@@ -4,19 +4,23 @@ import (
 	"fmt"
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/analysis/analyzer/keyword"
+	"github.com/fanky5g/ponzu/content"
 	"github.com/fanky5g/ponzu/driver"
-	"github.com/fanky5g/ponzu/entities"
 	"log"
 	"path"
 	"path/filepath"
-	"reflect"
 	"strings"
 )
 
-func (c *client) getExistingIndex(indexPath string, failOnMissingIndex bool) (driver.SearchIndexInterface, error) {
+func (c *client) getExistingIndex(indexPath string, failOnMissingIndex bool) (driver.SearchInterface, error) {
 	entityName := strings.TrimSuffix(path.Base(indexPath), IndexSuffix)
 	if searchIndex, ok := c.indexes[entityName]; ok {
 		return searchIndex, nil
+	}
+
+	entity, ok := c.entities[entityName]
+	if !ok {
+		return nil, fmt.Errorf("entity for %s not found", entityName)
 	}
 
 	var index bleve.Index
@@ -31,9 +35,8 @@ func (c *client) getExistingIndex(indexPath string, failOnMissingIndex bool) (dr
 	}
 
 	index.SetName(entityName)
-
-	var searchIndex driver.SearchIndexInterface
-	searchIndex, err = NewSearchIndex(entityName, index, c.repository(entityName))
+	var searchIndex driver.SearchInterface
+	searchIndex, err = NewSearchIndex(entity, index, c.repository(entityName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create search index: %v", err)
 	}
@@ -41,18 +44,12 @@ func (c *client) getExistingIndex(indexPath string, failOnMissingIndex bool) (dr
 	return searchIndex, nil
 }
 
-func (c *client) createIndex(entityName string, entityType interface{}, overwrite bool) error {
-	entity, ok := entityType.(entities.Searchable)
-	if !ok {
-		return fmt.Errorf("entity %s does not implement Searchable interface", entityName)
-	}
-
-	if !entity.IndexContent() {
-		fmt.Printf("%s is not searchable. Skipping index creation\n", entityName)
+func (c *client) createIndex(entity content.Entity, overwrite bool) error {
+	if !searchable(entity) {
 		return nil
 	}
 
-	idxName := fmt.Sprintf("%s%s", entityName, IndexSuffix)
+	idxName := fmt.Sprintf("%s%s", entity.EntityName(), IndexSuffix)
 	idxPath := filepath.Join(c.searchPath, idxName)
 
 	existingIndex, err := c.getExistingIndex(idxPath, overwrite)
@@ -72,15 +69,14 @@ func (c *client) createIndex(entityName string, entityType interface{}, overwrit
 
 	entityMapping := bleve.NewDocumentMapping()
 	entityMapping.AddFieldMappingsAt(TypeField, typeField)
+	searchableAttributes, err := getSearchableFields(entity)
+	if err != nil {
+		return err
+	}
 
-	for fieldName, fieldType := range entity.GetSearchableAttributes() {
-		switch fieldType.Kind() {
-		case reflect.String:
-			fieldMapping := bleve.NewTextFieldMapping()
-			entityMapping.AddFieldMappingsAt(fieldName, fieldMapping)
-		default:
-			return fmt.Errorf("unsupported field type: %s", fieldType.Kind())
-		}
+	for _, fieldName := range searchableAttributes {
+		fieldMapping := bleve.NewTextFieldMapping()
+		entityMapping.AddFieldMappingsAt(fieldName, fieldMapping)
 	}
 
 	indexMapping := bleve.NewIndexMapping()
@@ -91,15 +87,15 @@ func (c *client) createIndex(entityName string, entityType interface{}, overwrit
 		return fmt.Errorf("failed to build index: %v", err)
 	}
 
-	searchIndex, err := NewSearchIndex(entityName, index, c.repository(entityName))
+	searchIndex, err := NewSearchIndex(entity, index, c.repository(entity.EntityName()))
 	if err != nil {
 		return err
 	}
 
-	c.indexes[entityName] = searchIndex
+	c.indexes[entity.EntityName()] = searchIndex
 	return nil
 }
 
 func (c *client) CreateIndex(entityName string, entityType interface{}) error {
-	return c.createIndex(entityName, entityType, false)
+	return c.createIndex(entityType.(content.Entity), false)
 }
