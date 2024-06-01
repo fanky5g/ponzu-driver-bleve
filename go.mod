@@ -4,7 +4,7 @@ go 1.21.5
 
 require (
 	github.com/blevesearch/bleve v1.0.14
-	github.com/fanky5g/ponzu v0.0.0-20240520092742-0a60fdd5393a
+	github.com/fanky5g/ponzu v0.0.0-20240601083522-954e508df44d
 )
 
 require (
@@ -42,12 +42,12 @@ require (
 	github.com/steveyen/gtreap v0.1.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/willf/bitset v1.1.11 // indirect
-	go.etcd.io/bbolt v1.3.9 // indirect
+	go.etcd.io/bbolt v1.3.10 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/exp v0.0.0-20240531132922-fd00a4e0eefc // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
-	google.golang.org/protobuf v1.34.0 // indirect
+	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
