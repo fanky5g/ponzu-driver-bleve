@@ -3,9 +3,6 @@ package search
 import (
 	"fmt"
 	"github.com/blevesearch/bleve"
-	"github.com/fanky5g/ponzu/content"
-	"github.com/fanky5g/ponzu/driver"
-	"github.com/fanky5g/ponzu/util"
 	"reflect"
 	"strings"
 )
@@ -13,7 +10,7 @@ import (
 type Index struct {
 	Name                 string
 	idx                  bleve.Index
-	contentRepository    driver.Repository
+	contentRepository    Repository
 	searchableAttributes []string
 }
 
@@ -44,7 +41,7 @@ func (index *Index) Update(id string, data interface{}) error {
 		if fieldByName.IsValid() {
 			field = fieldByName
 		} else {
-			field = util.FieldByJSONTagName(data, fieldName)
+			field = fieldByJSONTagName(data, fieldName)
 		}
 
 		if !field.IsValid() {
@@ -97,7 +94,7 @@ func (index *Index) Search(query string, count, offset int) ([]interface{}, erro
 	return results, err
 }
 
-func NewSearchIndex(entity content.Entity, index bleve.Index, repo driver.Repository) (driver.SearchInterface, error) {
+func NewSearchIndex(entity Entity, index bleve.Index, repo Repository) (Search, error) {
 	searchableAttributes, err := getSearchableFields(entity)
 	if err != nil {
 		return nil, err

@@ -1,10 +1,8 @@
 package search
 
 import (
-	"fmt"
-	"github.com/fanky5g/ponzu/entities"
-	"github.com/fanky5g/ponzu/util"
-	"reflect"
+    "reflect"
+    "fmt"
 )
 
 // getSearchableFields returns fields that are supported for search
@@ -13,7 +11,7 @@ func getSearchableFields(entity interface{}) ([]string, error) {
 	t := v.Type()
 
 	var searchableFields []string
-	searchableAttributes, ok := entity.(entities.CustomizableSearchAttributes)
+	searchableAttributes, ok := entity.(CustomizableSearchAttributes)
 	if ok {
 		for attribute, attributeType := range searchableAttributes.GetSearchableAttributes() {
 			if attributeType.Kind() != reflect.String {
@@ -22,7 +20,7 @@ func getSearchableFields(entity interface{}) ([]string, error) {
 
 			field := v.FieldByName(attribute)
 			if !field.IsValid() {
-				field = util.FieldByJSONTagName(entity, attribute)
+				field = fieldByJSONTagName(entity, attribute)
 			}
 
 			if !field.IsValid() {
@@ -49,4 +47,24 @@ func getSearchableFields(entity interface{}) ([]string, error) {
 	}
 
 	return searchableFields, nil
+}
+
+func fieldByJSONTagName(structType interface{}, jsonTagName string) reflect.Value {
+	v := reflect.ValueOf(structType)
+	if v.Kind() == reflect.Pointer {
+		v = v.Elem()
+	}
+
+	for i := 0; i < v.NumField(); i++ {
+		typeField := v.Type().Field(i)
+		tag := typeField.Tag
+
+		if jsonTag, ok := tag.Lookup("json"); ok {
+			if jsonTag == jsonTagName {
+				return v.FieldByName(typeField.Name)
+			}
+		}
+	}
+
+	return reflect.Value{}
 }
