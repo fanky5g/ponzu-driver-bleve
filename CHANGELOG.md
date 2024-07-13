@@ -14,3 +14,7 @@
 ## 1.0.2
 
 - Fix: save index in map
+
+## 1.0.3
+
+- Fix: return \*Hit
