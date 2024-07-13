@@ -91,11 +91,11 @@ func (c *Client) Delete(entityName, entityId string) error {
 }
 
 func (c *Client) SearchWithPagination(entity interface{}, query string, count, offset int) ([]interface{}, int, error) {
-    index, err := c.index(entity)
-    if err != nil {
-        return nil, 0, err
-    }
-    
+	index, err := c.index(entity)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	q := bleve.NewQueryStringQuery(fmt.Sprintf("+%s:%s +%s", TypeField, index.Name, query))
 	searchRequest := bleve.NewSearchRequestOptions(q, count, offset, false)
 	res, err := index.idx.Search(searchRequest)
@@ -103,12 +103,12 @@ func (c *Client) SearchWithPagination(entity interface{}, query string, count, o
 		return nil, 0, err
 	}
 
-    results := make([]interface{}, res.Size())
+	results := make([]interface{}, len(res.Hits)) 
 	for i, doc := range res.Hits {
 		results[i] = Hit{doc: doc}
 	}
 
-	return results, res.Size(), nil
+	return results, int(res.Total), nil
 }
 
 func (c *Client) Search(entity interface{}, query string, count, offset int) ([]interface{}, error) {
@@ -117,11 +117,11 @@ func (c *Client) Search(entity interface{}, query string, count, offset int) ([]
 }
 
 func (c *Client) index(e interface{}) (*Index, error) {
-    entity, ok := e.(Entity)
-    if !ok {
-        return nil, ErrInvalidSearchEntity
-    }
-    
+	entity, ok := e.(Entity)
+	if !ok {
+		return nil, ErrInvalidSearchEntity
+	}
+
 	index, ok := c.indexes[entity.EntityName()]
 	if !ok {
 		bleveIndex, err := c.getBleveIndex(entity)
@@ -133,8 +133,9 @@ func (c *Client) index(e interface{}) (*Index, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initialize search index")
 		}
+
+		c.indexes[entity.EntityName()] = index
 	}
 
 	return index, nil
 }
-
