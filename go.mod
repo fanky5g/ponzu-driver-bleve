@@ -2,7 +2,10 @@ module github.com/fanky5g/ponzu-driver-bleve
 
 go 1.21.5
 
-require github.com/blevesearch/bleve v1.0.14
+require (
+	github.com/blevesearch/bleve v1.0.14
+	github.com/pkg/errors v0.9.1
+)
 
 require (
 	github.com/RoaringBitmap/roaring v1.9.3 // indirect
