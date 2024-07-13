@@ -105,7 +105,7 @@ func (c *Client) SearchWithPagination(entity interface{}, query string, count, o
 
 	results := make([]interface{}, len(res.Hits)) 
 	for i, doc := range res.Hits {
-		results[i] = Hit{doc: doc}
+		results[i] = &Hit{doc: doc}
 	}
 
 	return results, int(res.Total), nil
