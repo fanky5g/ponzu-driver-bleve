@@ -4,3 +4,6 @@
 ## 1.0.0 [breaking]
 - Remove returning interfaces
 - Implement redefined Ponzu SearchInterface
+
+## 1.0.1
+- Fix keyword analyzer import
