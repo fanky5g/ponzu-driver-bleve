@@ -1,131 +1,140 @@
 package search
 
 import (
-	"errors"
 	"fmt"
-	"github.com/blevesearch/bleve"
-	"github.com/blevesearch/bleve/mapping"
-	"github.com/fanky5g/ponzu/config"
-	"github.com/fanky5g/ponzu/content/item"
-	"github.com/fanky5g/ponzu/driver"
-	"github.com/fanky5g/ponzu/infrastructure/repositories"
-	"log"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
+	"reflect"
+
+	"github.com/blevesearch/bleve"
+	"github.com/pkg/errors"
 )
 
-var TypeField = "type"
-var IndexSuffix = ".index"
+var (
+	TypeField              = "type"
+	IndexSuffix            = ".index"
+	ErrInvalidSearchEntity = errors.New("invalid search entity")
+)
 
-type client struct {
-	searchPath        string
-	indexes           map[string]driver.SearchIndexInterface
-	contentRepository repositories.ContentRepositoryInterface
+type Client struct {
+	searchPath string
+	indexes    map[string]*Index
 }
 
-// UpdateIndex TODO: only call when an item structure updates (via manual command)
-func (c *client) UpdateIndex(entityName string, entityType interface{}) error {
-	if err := c.createIndex(entityName, entityType, true); err != nil {
-		return err
-	}
+func New(dataDir string) (*Client, error) {
+	var err error
 
-	searchIndex, err := c.GetIndex(entityName)
-	if err != nil {
-		return err
-	}
-
-	if searchIndex == nil {
-		return errors.New("failed to update index")
-	}
-
-	go func() {
-		entities, err := c.contentRepository.FindAll(entityName)
-		if err != nil {
-			log.Fatalf("Failed to re-index namespace: %s. Error: %v", entityName, err)
-		}
-
-		for _, entity := range entities {
-			if err = searchIndex.Update(entity.(item.Identifiable).ItemID(), entity); err != nil {
-				log.Fatalf("Failed to index entity: %v", entity)
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (c *client) Indexes() (map[string]driver.SearchIndexInterface, error) {
-	return c.indexes, nil
-}
-
-func (c *client) GetIndex(entityName string) (driver.SearchIndexInterface, error) {
-	if index, ok := c.indexes[entityName]; ok {
-		return index, nil
-	}
-
-	return nil, fmt.Errorf("index for %s not implemented", entityName)
-}
-
-func (c *client) persistIndex(indexPath string, mapping *mapping.IndexMappingImpl) (bleve.Index, error) {
-	mapping.TypeField = TypeField
-	_, err := os.Stat(indexPath)
-	if err == nil {
-		if err = os.RemoveAll(indexPath); err != nil {
-			return nil, fmt.Errorf("failed to remove existing index: %v", err)
-		}
-	}
-
-	return bleve.New(indexPath, mapping)
-}
-
-func New(contentRepository repositories.ContentRepositoryInterface) (driver.SearchClientInterface, error) {
-	cfg, err := config.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config: %v", err)
-	}
-
-	searchPath := filepath.Join(cfg.Paths.DataDir, "search")
-
+	searchPath := filepath.Join(dataDir, "search")
 	if err = os.MkdirAll(searchPath, os.ModeDir|os.ModePerm); err != nil {
 		return nil, err
 	}
 
-	c := &client{
-		indexes:           make(map[string]driver.SearchIndexInterface),
-		contentRepository: contentRepository,
-		searchPath:        searchPath,
+	c := &Client{
+		indexes:    make(map[string]*Index),
+		searchPath: searchPath,
 	}
 
-	if contentRepository != nil {
-		// Load existing types
-		managedTypes := contentRepository.Types()
-		searchDirItems, err := os.ReadDir(searchPath)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(searchDirItems) > 0 {
-			for _, searchDirItem := range searchDirItems {
-				if searchDirItem.IsDir() {
-					entityName := strings.TrimSuffix(searchDirItem.Name(), IndexSuffix)
-					if _, ok := managedTypes[entityName]; ok {
-						searchIndex, err := c.getExistingIndex(path.Join(searchPath, searchDirItem.Name()), false)
-						if err != nil {
-							return nil, err
-						}
-
-						if searchIndex != nil {
-							log.Printf("Search index %s initialized\n", entityName)
-							c.indexes[entityName] = searchIndex
-						}
-					}
-
-				}
-			}
-		}
-	}
-
-	return c, nil
+	return c, err
 }
+
+func (c *Client) Update(id string, data interface{}) error {
+	entity, ok := data.(Entity)
+	if !ok {
+		return ErrInvalidSearchEntity
+	}
+
+	index, err := c.index(entity)
+	if err != nil {
+		return err
+	}
+
+	doc := make(map[string]string)
+	v := reflect.ValueOf(data)
+	if v.Kind() == reflect.Ptr {
+		v = reflect.Indirect(v)
+	}
+
+	doc[TypeField] = index.Name
+	for _, fieldName := range index.searchableAttributes {
+		var field reflect.Value
+
+		fieldByName := v.FieldByName(fieldName)
+		if fieldByName.IsValid() {
+			field = fieldByName
+		} else {
+			field = fieldByJSONTagName(data, fieldName)
+		}
+
+		if !field.IsValid() {
+			return fmt.Errorf("invalid field %s", fieldName)
+		}
+
+		if field.Kind() != reflect.String {
+			return fmt.Errorf("%s type %s is not supported in search", fieldName, field.Kind())
+		}
+
+		if !field.IsZero() {
+			doc[fieldName] = field.String()
+		}
+	}
+
+	return index.idx.Index(id, doc)
+}
+
+func (c *Client) Delete(entityName, entityId string) error {
+	index, ok := c.indexes[entityName]
+	if !ok {
+		return nil
+	}
+
+	return index.idx.Delete(entityId)
+}
+
+func (c *Client) SearchWithPagination(entity interface{}, query string, count, offset int) ([]interface{}, int, error) {
+    index, err := c.index(entity)
+    if err != nil {
+        return nil, 0, err
+    }
+    
+	q := bleve.NewQueryStringQuery(fmt.Sprintf("+%s:%s +%s", TypeField, index.Name, query))
+	searchRequest := bleve.NewSearchRequestOptions(q, count, offset, false)
+	res, err := index.idx.Search(searchRequest)
+	if err != nil {
+		return nil, 0, err
+	}
+
+    results := make([]interface{}, res.Size())
+	for i, doc := range res.Hits {
+		results[i] = Hit{doc: doc}
+	}
+
+	return results, res.Size(), nil
+}
+
+func (c *Client) Search(entity interface{}, query string, count, offset int) ([]interface{}, error) {
+	results, _, err := c.SearchWithPagination(entity, query, count, offset)
+	return results, err
+}
+
+func (c *Client) index(e interface{}) (*Index, error) {
+    entity, ok := e.(Entity)
+    if !ok {
+        return nil, ErrInvalidSearchEntity
+    }
+    
+	index, ok := c.indexes[entity.EntityName()]
+	if !ok {
+		bleveIndex, err := c.getBleveIndex(entity)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get bleve index")
+		}
+
+		index, err = NewSearchIndex(entity, bleveIndex)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to initialize search index")
+		}
+	}
+
+	return index, nil
+}
+
